@@ -14,16 +14,13 @@
   $totalSales = getTotalSales($dataSet);
   $monthWiseSalesTotal = getMonthWiseSalesTotal($dataSet);
   $mostPopularItems = getMostPopularAndRevenueItems($dataSet,'quantity');
-  $mostRevenueItemsInMonth = getMostPopularAndRevenueItems($dataSet,'total price');
-  $popularItemsObj = json_decode($mostPopularItems);
-  $popularItemsRecords = (array) $popularItemsObj;
-  $popularItems = array_unique(array_values($popularItemsRecords));
+  $mostRevenueItemsInMonth = $mostPopularItems['mostRevenueItemPerMonth'];
+  $popularItems = array_unique(array_values($mostPopularItems['mostPopularItemPerMonth']));
   $minMaxandAvgOrderPerMonth = getMinMaxandAvgOrderPerMonth($dataSet,$popularItems);
-
   $response['totalSales'] = $totalSales;
   $response['monthWiseSalesTotal'] = json_decode($monthWiseSalesTotal);
-  $response['mostPopularItems'] = $popularItemsRecords;
-  $response['mostRevenueItemsInMonth'] = json_decode($mostRevenueItemsInMonth);
+  $response['mostPopularItems'] = $mostPopularItems['mostPopularItemPerMonth'];
+  $response['mostRevenueItemsInMonth'] = $mostRevenueItemsInMonth;
   $response['minMaxandAvgOrdersPerMonth'] = json_decode($minMaxandAvgOrderPerMonth);
   echo json_encode($response);
   echo "</pre>";
@@ -118,63 +115,51 @@
   	$headerRow = array_map('strtolower', $dataSet[0]);
   	$searchIndex = getSearchIndex('date',$headerRow);
   	$quantitySearchIndex = getSearchIndex($searchIndexColumn,$headerRow);
+  	$productSearchIndex =  getSearchIndex($searchIndexColumn,$headerRow);
+  	$priceSearchIndex = getSearchIndex('total price',$headerRow);
   	$uniqueDates = getUniqueDateMonthYear($dataSet,$searchIndex,"day");
 	$uniqueMonths = getUniqueDateMonthYear($dataSet,$searchIndex,"month");	
 	$uniqueYears = getUniqueDateMonthYear($dataSet,$searchIndex,"year");
+	$products = array_column($dataSet, $productSearchIndex);
+	$productUList = array_unique($products);
+	$productsList = array_slice($productUList,1);
 	$result = [];
 	$labels = array();
 	$values = array();	
-	$quantity = [];
 	$productList = [];
-	$uniqueDays = [];
+	$monthWiseQtyData = [];
+	$monthWiseSalesData = [];
+
 	foreach ($uniqueMonths as $key => $month) {
 	    $from_date = '20'.current($uniqueYears).'-'.$month.'-'.current($uniqueDates);
 	    $to_date = '20'.end($uniqueYears).'-'.$month.'-'.cal_days_in_month(CAL_GREGORIAN,$month,end($uniqueYears));
-	    foreach($dataSet as $salesItems){
-	    	// print_r($salesItems);
-	        if(strtotime($salesItems[0]) >= strtotime($from_date) AND strtotime($salesItems[0]) <= strtotime($to_date)){ 
+   		foreach($dataSet as $salesItems){
+   			if(strtotime($salesItems[0]) >= strtotime($from_date) AND strtotime($salesItems[0]) <= strtotime($to_date)){ 
 	            $labels[] = $salesItems[0];
 	            $values[] = $salesItems;
-	            $quantity[] = $salesItems[$quantitySearchIndex];
-	            $productList[] = $salesItems[1];
-	            $uniqueDays[] = $salesItems[0];
-	        }
-	    }
-	    $dayWiseRecords = $values;
-	    $maxrowcount =  count($dayWiseRecords)-1;
-	    $initial = 0;
-	    $qtyArray = [];	  
-	    $uniqueproducts = array_unique($productList);
-	    $uniquedays = array_unique($uniqueDays);  
-	   	foreach ($dayWiseRecords as $key => $dayWiseRecord) {
-
-	    	// get the quantities sold per day for each product
-
-	    	foreach ($uniqueproducts as $uniqueproduct) {
-	    		if($dayWiseRecord[0] == $uniqueDays[$initial] && $dayWiseRecord[1] == $uniqueproduct){
-	    			
-	    			if(array_key_exists($uniqueproduct, $qtyArray)){
-	    				$value = $qtyArray[$uniqueproduct];
-	    				$qtyArray[$uniqueproduct] = $value + $dayWiseRecord[$quantitySearchIndex];
-
-	    			}else{
-	    				$qtyArray[$uniqueproduct] = $dayWiseRecord[$quantitySearchIndex];
-	    			}		    				
-    			}	
-	    	}
-	    	$initial++;
-	    }
-	    $max = max(array_values($qtyArray));
-	    $key = array_search($max, $qtyArray);
-	    $result['20'.current($uniqueYears).'-'.$month] = $key;
+	            // for both most popular and revenue item
+	            if(isset($monthWiseQtyData[$month][$salesItems[1]])){
+	            	$monthWiseQtyData[$month][$salesItems[1]] += $salesItems[$quantitySearchIndex];
+	            }else{
+	            	$monthWiseQtyData[$month][$salesItems[1]] = $salesItems[$quantitySearchIndex];
+	            }
+	            if(isset($monthWiseSalesData[$month][$salesItems[1]])){
+	            	$monthWiseSalesData[$month][$salesItems[1]] += $salesItems[$priceSearchIndex];
+	            }else{
+	            	$monthWiseSalesData[$month][$salesItems[1]] = $salesItems[$priceSearchIndex];
+	            }
+	        }	   			
+	    }		 
+	   	$salesMax = array_sum($monthWiseSalesData[$month]);
+	   	$salesMax = max(array_values($monthWiseSalesData[$month]));
+	    $mostRevenueItemPerMonth = array_search($salesMax, $monthWiseSalesData[$month]);
+	    $max = max(array_values($monthWiseQtyData[$month]));
+	    $key = array_search($max, $monthWiseQtyData[$month]);	  
+	    $result['mostPopularItemPerMonth']['20'.current($uniqueYears).'-'.$month]  = $key;
+	    $result['mostRevenueItemPerMonth']['20'.current($uniqueYears).'-'.$month]  = $mostRevenueItemPerMonth;	    
 	}
-
-	return json_encode($result);
-
+	return $result;
   }
-
-
-
 
   function getMinMaxandAvgOrderPerMonth($dataSet,$mostPopularItem){
   	$headerRow = array_map('strtolower', $dataSet[0]);
@@ -200,30 +185,23 @@
 	            $quantity[] = $salesItems[$quantitySearchIndex];
 	            $productList[] = $salesItems[1];
 	            $uniqueDays[] = $salesItems[0];
+	            if ($month == date('m', strtotime($salesItems[0]))){
+		   			if(in_array($salesItems[0], array_keys($daysSales)) ){		
+		    			$daysSales[$salesItems[0]] += $salesItems[$quantitySearchIndex];  
+			    	}else{
+			    		$daysSales[$salesItems[0]] =  $salesItems[$quantitySearchIndex];
+			    	}
+		   		}
 	        }
-	    }
-	   foreach ($values as $valueNew) {
-	   		if ($month == date('m', strtotime($valueNew[0]))){
-	   			if(in_array($valueNew[0], array_keys($daysSales)) ){		
-	    			$daysSales[$valueNew[0]] += $valueNew[$quantitySearchIndex];  
-		    	}else{
-		    		$daysSales[$valueNew[0]] =  $valueNew[$quantitySearchIndex];
-		    	}
-	   		}
-	    	
-	    }
-	   
+	    }  
 	    $maximumOrdersPerMonth = (int)max($daysSales);
 	    $minimumOrdersPerMonth = (int)min($daysSales);
-	    $averageOrdersPerMonth = (array_sum($daysSales)/cal_days_in_month(CAL_GREGORIAN,$month,end($uniqueYears)));
-	  
-	    $daysSales = [];
-	  
+	    $averageOrdersPerMonth = (array_sum($daysSales)/cal_days_in_month(CAL_GREGORIAN,$month,end($uniqueYears)));	  
+	    $daysSales = [];	  
 	    $result['20'.current($uniqueYears).'-'.$month]['minimumOrdersPerMonth'] = $minimumOrdersPerMonth;
 	    $result['20'.current($uniqueYears).'-'.$month]['maximumOrdersPerMonth'] = $maximumOrdersPerMonth;
 	    $result['20'.current($uniqueYears).'-'.$month]['averageOrdersPerMonth'] = number_format((float)$averageOrdersPerMonth, 2, '.', '');
 	}
-
 	return json_encode($result);
   }		
 
@@ -245,12 +223,12 @@
     </section>
     <section>
     	<p>Most popular item (most quantity sold) in each month.
-    		<?php print_r($mostPopularItems);?>
+    		<?php print_r(json_encode($mostPopularItems));?>
     	</p>
     </section>
     <section>
     	<p>Items generating most revenue in each month</p>
-    	<?php print_r($mostRevenueItemsInMonth);?>
+    	<?php print_r(json_encode($mostRevenueItemsInMonth));?>
     </section>
     <section>
     	<p>For the most popular item, find the min, max and average number of orders each month.</p>
