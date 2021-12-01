@@ -1,5 +1,10 @@
 
-<?php include('server.php'); ?>
+<?php
+
+$server = include('server.php'); 
+
+
+?>
 
 
 <!DOCTYPE html>
@@ -10,13 +15,19 @@
 <body >
 	<form action="" method="POST">
 	  <label>Choose From Date</label>
-	  <input type="date" name="from_date">
+	  <input type="date" name="from_date" required>
 	  <br/>
 	  <label>Choose To Date</label>
-	  <input type="date" name="to_date">
+	  <input type="date" name="to_date" required>
 	  <br/>
-	  <input type="submit" name="submit" value="submit">
+	  <input type="submit" name="submit" value="Get Data">
 	</form>
+    <br/>
+     <section>
+        JSON RESPONSE
+        <?php print_r($server); ?>
+    </section>
+    <br>
     <section >
         <p>Total sales of the store : <?php echo $totalSales; ?> </p>
     </section>
@@ -84,6 +95,7 @@
     		</tr>
     	<?php } ?>
     </section>
+   
 </body>
 </html>
 
