@@ -41,12 +41,18 @@
 			$popularItems = array_unique(array_values($mostPopularItems['mostPopularItemPerMonth']));
 			$minMaxandAvgOrderPerMonth = getMinMaxandAvgOrderPerMonth($filteredData,$popularItems);	  
 			$response['filtered'] = 1;
+			 $response['totalSales'] = $totalSales;
+			$response['monthWiseSalesTotal'] = json_decode($monthWiseSalesTotal);
+			$response['mostPopularItems'] = $mostPopularItems['mostPopularItemPerMonth'];
+			$response['mostRevenueItemsInMonth'] = $mostRevenueItemsInMonth;
+			$response['minMaxandAvgOrdersPerMonth'] = json_decode($minMaxandAvgOrderPerMonth);
 			 	
 		}else{
 			echo "Sorry No records found";
 		}	   
   
 	}else{
+		$graphData = getMonthWiseSalesTotalforGraph($dataSet);
 		$totalSales = getTotalSales($dataSet);
 		$monthWiseSalesTotal = getMonthWiseSalesTotal($dataSet);
 		$mostPopularItems = getMostPopularAndRevenueItems($dataSet,'quantity');
@@ -54,26 +60,26 @@
 		$popularItems = array_unique(array_values($mostPopularItems['mostPopularItemPerMonth']));
 		$minMaxandAvgOrderPerMonth = getMinMaxandAvgOrderPerMonth($dataSet,$popularItems);
 		$response['filtered'] = 0;
-	}
-        $response['totalSales'] = $totalSales;
+		 $response['totalSales'] = $totalSales;
 		$response['monthWiseSalesTotal'] = json_decode($monthWiseSalesTotal);
 		$response['mostPopularItems'] = $mostPopularItems['mostPopularItemPerMonth'];
 		$response['mostRevenueItemsInMonth'] = $mostRevenueItemsInMonth;
 		$response['minMaxandAvgOrdersPerMonth'] = json_decode($minMaxandAvgOrderPerMonth);
+	}
+       
 
 	  return json_encode($response);
-  }catch(Execption $e){
-  	echo $e;
+  }catch(Exception $e){
+  	echo 'Error: ' .$e->getMessage();
   }
 
   function getSearchIndex($type,$headerRow){  	 
   	return  array_search($type, $headerRow);
   }
   function getTotalSales($dataSet){
-
   	// read first row, convert row values to lowercase and find quantity column position
   	$total = [];
-  	$headerRow = array_map('strtolower', $dataSet[0]);  	
+  	// $headerRow = array_map('strtolower', $dataSet[0]);  	
   	array_shift($dataSet);
 	$total = array_column($dataSet, 4);
   	return array_sum($total);
@@ -125,6 +131,55 @@
 	    }
 	    $result[current($uniqueYears).'-'.$month] = array_sum($values);
 	    $values = [];		   
+	}
+	return json_encode($result);
+	
+	
+  }
+
+   function getMonthWiseSalesTotalforGraph($dataSet){
+  	// read csv , get index, get unique month , get sales total
+  	$headerRow = array_map('strtolower', $dataSet[0]);
+  	$searchIndex = getSearchIndex(DATE,$headerRow);
+
+  	$uniqueDates = getUniqueDateMonthYear($dataSet,$searchIndex,"day");
+	$uniqueMonths = getUniqueDateMonthYear($dataSet,$searchIndex,"month");	
+	$uniqueYears = getUniqueDateMonthYear($dataSet,$searchIndex,"year");
+	
+	$result = [];
+	$labels = array();
+	$values = array();	
+	$productsList = [];
+	$monthWiseQtyData = [];
+	$monthWiseSalesData = [];
+	foreach ($uniqueMonths as $key => $month) {
+		
+		// $from_date = current($uniqueYears).'-'.$month.'-'.current($uniqueDates);
+  //   	$to_date = end($uniqueYears).'-'.$month.'-'.cal_days_in_month(CAL_GREGORIAN,$month,end($uniqueYears));
+		$from_date = '2019-01-01';
+		$to_date = '2019-01-31';
+		
+	    foreach($dataSet as $salesItems){
+	        if(strtotime($salesItems[0]) >= strtotime($from_date) AND strtotime($salesItems[0]) <= strtotime($to_date)){ 
+	            $labels[] = $salesItems[0];
+	            $values[] = $salesItems[4];
+	        }
+	        if(isset($monthWiseQtyData[$month][$salesItems[1]])){
+	            	$monthWiseQtyData[$month][$salesItems[1]] += $salesItems[3];
+            }else{
+            	$monthWiseQtyData[$month][$salesItems[1]] = $salesItems[3];
+            }
+            if(isset($monthWiseSalesData[$month][$salesItems[1]])){
+            	$monthWiseSalesData[$month][$salesItems[1]] += $salesItems[4];
+            }else{
+            	$monthWiseSalesData[$month][$salesItems[1]] = $salesItems[4];
+            }
+
+	    }
+	    // $result[current($uniqueYears).'-'.$month] = array_sum($values);
+	    // $values = [];		 
+	    return ($monthWiseSalesData['01']); 
+	    // break; 
 	}
 	return json_encode($result);
 	
